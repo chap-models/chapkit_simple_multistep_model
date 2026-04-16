@@ -25,8 +25,9 @@ import pandas as pd
 import yaml
 from chapkit.data import DataFrame as ChapDataFrame
 
+from .config import MultistepConfig
 from .predict import on_predict
-from .train import MultistepConfig, on_train
+from .train import on_train
 
 
 def _load_config(config_path: Path = Path("config.yml")) -> MultistepConfig:

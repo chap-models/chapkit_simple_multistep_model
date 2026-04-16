@@ -15,8 +15,9 @@ from chapkit.api import (
 from chapkit.artifact import ArtifactHierarchy
 from chapkit.ml import FunctionalModelRunner
 
+from .config import MultistepConfig
 from .predict import on_predict
-from .train import MultistepConfig, on_train
+from .train import on_train
 
 runner: FunctionalModelRunner[MultistepConfig] = FunctionalModelRunner(
     on_train=on_train,

@@ -7,7 +7,7 @@ from chapkit.data import DataFrame as ChapDataFrame
 from geojson_pydantic import FeatureCollection
 
 from . import DataFrameMultistepModel
-from .train import INDEX_COLS, TARGET_VARIABLE, MultistepConfig
+from .config import INDEX_COLS, TARGET_VARIABLE, MultistepConfig
 from .transformations import transform_data
 
 

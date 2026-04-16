@@ -218,7 +218,7 @@ async def on_predict(
 >
 > This is the single most common mistake when migrating a Python model. The `chapkit test` CLI surfaces it as `AttributeError: 'DataFrame' object has no attribute 'sort_values'` on the first training job.
 
-In this repo the two callables live in separate files — [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) (also owns `MultistepConfig` and shared constants) and [`src/simple_multistep_model/predict.py`](../src/simple_multistep_model/predict.py) — and `main.py` just imports and wires them. That keeps `main.py` focused on service composition and avoids one giant module. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
+In this repo the two callables live in separate files — [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) and [`src/simple_multistep_model/predict.py`](../src/simple_multistep_model/predict.py) — and the `MultistepConfig` Pydantic class plus the canonical column constants (`INDEX_COLS`, `TARGET_VARIABLE`, `DEFAULT_FEATURES`) live in a sibling [`config.py`](../src/simple_multistep_model/config.py) so neither train nor predict depends on the other. `main.py` just imports and wires them all. That keeps each module focused: `config.py` is the schema, `train.py` is the training callable, `predict.py` is the prediction callable, `main.py` is service composition. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
 
 ```python
 from chapkit.data import DataFrame as ChapDataFrame
@@ -704,7 +704,8 @@ my-model/
         ├── __init__.py
         ├── __main__.py            # `python -m simple_multistep_model` -> uvicorn
         ├── main.py                # service composition (info, hierarchy, builder)
-        ├── train.py               # MultistepConfig + on_train
+        ├── config.py              # MultistepConfig + canonical column constants
+        ├── train.py               # on_train
         ├── predict.py             # on_predict
         ├── multistep.py           # MultistepModel and friends (the algorithm)
         ├── one_step_model.py      # SkproWrapper, ResidualBootstrapModel
@@ -731,7 +732,7 @@ Inside the package, switch to relative imports (`from . import DataFrameMultiste
 
 ### Split `main.py` into `train.py` + `predict.py`
 
-Once `on_train` and `on_predict` start growing real logic, give them their own modules. `main.py` shrinks to pure service composition (info, hierarchy, builder, `from .train import on_train`, `from .predict import on_predict`). In this repo the split lands at ~67 LOC for `main.py`, ~68 for `train.py` (also owns `MultistepConfig`), ~31 for `predict.py`.
+Once `on_train` and `on_predict` start growing real logic, give them their own modules — and put the `MultistepConfig` Pydantic class plus shared constants in a sibling `config.py` so neither callable depends on the other. `main.py` shrinks to pure service composition (`from .config import MultistepConfig`, `from .train import on_train`, `from .predict import on_predict`, then info / hierarchy / builder). In this repo the split lands at ~40 LOC for `config.py`, ~40 for `train.py`, ~30 for `predict.py`, ~67 for `main.py`.
 
 ### `__main__.py` for `python -m`
 
@@ -801,7 +802,8 @@ The canonical worked example for every section above.
 |---|---|
 | [`src/simple_multistep_model/main.py`](../src/simple_multistep_model/main.py) | Service composition — info, hierarchy, builder. Imports `on_train` / `on_predict` from sibling modules |
 | [`src/simple_multistep_model/__main__.py`](../src/simple_multistep_model/__main__.py) | `python -m simple_multistep_model` entry point (uvicorn boot) |
-| [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) | `MultistepConfig` (Pydantic) + `on_train` callable |
+| [`src/simple_multistep_model/config.py`](../src/simple_multistep_model/config.py) | `MultistepConfig` (Pydantic) + canonical column constants — imported by both `train.py` and `predict.py` |
+| [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) | `on_train` callable |
 | [`src/simple_multistep_model/predict.py`](../src/simple_multistep_model/predict.py) | `on_predict` callable |
 | [`src/simple_multistep_model/multistep.py`](../src/simple_multistep_model/multistep.py), [`one_step_model.py`](../src/simple_multistep_model/one_step_model.py) | The model algorithm itself — pure pandas / xarray, no chapkit dependency |
 | [`src/simple_multistep_model/transformations.py`](../src/simple_multistep_model/transformations.py) | Feature-engineering helpers (lag features + one-hot location) |
