@@ -313,7 +313,7 @@ info = MLServiceInfo(
     ),
     model_metadata=ModelMetadata(
         author="CHAP team",
-        author_assessed_status=AssessedStatus.gray,
+        author_assessed_status=AssessedStatus.orange,
         organization="HISP Centre, University of Oslo",
         contact_email="morten@dhis2.org",
     ),
