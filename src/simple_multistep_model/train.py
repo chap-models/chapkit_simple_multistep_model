@@ -20,6 +20,10 @@ DEFAULT_FEATURES = ["rainfall", "mean_temperature", "mean_relative_humidity"]
 
 
 class MultistepConfig(BaseConfig):
+    prediction_periods: int = Field(
+        default=12,
+        description="Number of periods to forecast into the future.",
+    )
     n_target_lags: int = Field(
         default=6,
         description="Number of lagged target values to feed the one-step regressor.",
