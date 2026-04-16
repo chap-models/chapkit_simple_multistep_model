@@ -52,7 +52,7 @@ def test_health(client: TestClient) -> None:
 
 def test_info(client: TestClient) -> None:
     info = client.get("/api/v1/info").json()
-    assert info["id"] == "chapkit-simple-multistep-template"
+    assert info["id"] == "chapkit-simple-multistep-model"
     assert info["period_type"] == "monthly"
 
 

@@ -28,7 +28,7 @@ COPY --chown=root:root src ./src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev && \
-    python -m compileall -q src/simple_multistep_model
+    python -m compileall -q src/chapkit_simple_multistep_model
 
 RUN mkdir -p /app/data && chown chap:chap /app/data
 
@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 USER chap
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["python", "-m", "simple_multistep_model"]
+CMD ["python", "-m", "chapkit_simple_multistep_model"]

@@ -1,6 +1,6 @@
 .PHONY: help build run run-ghcr test lint check clean
 
-GHCR_IMAGE  ?= ghcr.io/chap-models/chapkit_simple_multistep_template:latest
+GHCR_IMAGE  ?= ghcr.io/chap-models/chapkit_simple_multistep_model:latest
 
 help:
 	@echo "Usage: make [target]"

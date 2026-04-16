@@ -1,4 +1,4 @@
-"""Chapkit service wrapping the simple_multistep_model recursive forecaster."""
+"""Chapkit service wrapping the chapkit_simple_multistep_model recursive forecaster."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ runner: FunctionalModelRunner[MultistepConfig] = FunctionalModelRunner(
 )
 
 info = MLServiceInfo(
-    id="chapkit-simple-multistep-template",
+    id="chapkit-simple-multistep-model",
     display_name="Simple Multistep Model (chapkit)",
     version="0.1.0",
     description=(
@@ -46,7 +46,7 @@ info = MLServiceInfo(
 )
 
 hierarchy = ArtifactHierarchy(
-    name="simple_multistep_model",
+    name="chapkit_simple_multistep_model",
     level_labels={0: "ml_training_workspace", 1: "ml_prediction"},
 )
 

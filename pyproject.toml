@@ -3,7 +3,7 @@ requires = ["uv_build>=0.5,<0.12"]
 build-backend = "uv_build"
 
 [project]
-name = "simple_multistep_model"
+name = "chapkit_simple_multistep_model"
 version = "0.1.0"
 description = "Multistep recursive forecasting model exposed as a chapkit service"
 requires-python = ">=3.13"
@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-train = "simple_multistep_model.cli:train_cli"
-predict = "simple_multistep_model.cli:predict_cli"
+train = "chapkit_simple_multistep_model.cli:train_cli"
+predict = "chapkit_simple_multistep_model.cli:predict_cli"
 
 [dependency-groups]
 dev = [

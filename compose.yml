@@ -1,5 +1,5 @@
 services:
-  simple-multistep:
+  chapkit-simple-multistep-model:
     build: .
     ports:
       - "8000:8000"

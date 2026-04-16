@@ -22,7 +22,7 @@ os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{_DB_DIR}/test.db")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from simple_multistep_model.main import app  # noqa: E402
+from chapkit_simple_multistep_model.main import app  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLE_DATA = REPO_ROOT / "example_data"

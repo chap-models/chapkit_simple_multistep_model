@@ -1,4 +1,4 @@
-# chapkit_simple_multistep_template
+# chapkit_simple_multistep_model
 
 Chapkit-based service wrapping a multistep recursive disease forecaster (sklearn `RandomForestRegressor` + skpro `ResidualDouble` wrapped in a per-location lag-feature multistep predictor).
 
@@ -8,10 +8,10 @@ See [`docs/migration-to-chapkit.md`](docs/migration-to-chapkit.md) for the full 
 
 ```
 uv sync
-uv run python -m simple_multistep_model
+uv run python -m chapkit_simple_multistep_model
 ```
 
-(or `uv run uvicorn simple_multistep_model.main:app --host 0.0.0.0 --port 8000`)
+(or `uv run uvicorn chapkit_simple_multistep_model.main:app --host 0.0.0.0 --port 8000`)
 
 Then in another shell:
 
@@ -42,9 +42,9 @@ make test           # pytest end-to-end (in-process via FastAPI TestClient)
 ## Layout
 
 ```
-src/simple_multistep_model/
+src/chapkit_simple_multistep_model/
 ├── __init__.py
-├── __main__.py          # python -m simple_multistep_model
+├── __main__.py          # python -m chapkit_simple_multistep_model
 ├── main.py              # service composition (info, hierarchy, builder)
 ├── train.py             # MultistepConfig + on_train
 ├── predict.py           # on_predict

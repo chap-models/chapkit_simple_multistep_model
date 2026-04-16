@@ -1,6 +1,6 @@
 services:
-  simple-multistep:
-    image: ghcr.io/chap-models/chapkit_simple_multistep_template:latest
+  chapkit-simple-multistep-model:
+    image: ghcr.io/chap-models/chapkit_simple_multistep_model:latest
     pull_policy: always
     ports:
       - "8000:8000"

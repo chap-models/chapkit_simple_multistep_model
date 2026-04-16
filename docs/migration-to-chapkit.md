@@ -6,12 +6,12 @@ The recommended path is to scaffold a fresh chapkit project with the `chapkit` C
 
 For the **R / non-Python** equivalent of this guide (shell runner, R-INLA Dockerfile, column adapters), see [`chapkit_ewars_template/docs/migration-to-chapkit.md`](https://github.com/chap-models/chapkit_ewars_template/blob/main/docs/migration-to-chapkit.md).
 
-## Worked example: `simple_multistep_model` to `chapkit_simple_multistep_template`
+## Worked example: `chapkit_simple_multistep_model` to `chapkit_simple_multistep_model`
 
 The concrete before/after used throughout this guide:
 
-- **Starting point:** a flat Python repo with `train.py`, `predict.py`, a `simple_multistep_model/` package implementing a recursive multistep forecaster (sklearn `RandomForestRegressor` wrapped in skpro `ResidualDouble`), `transformations.py` with feature engineering, and `training_data.csv`. The CLI is `argparse` with positional args (`python train.py training_data.csv model.pkl`).
-- **Ending point:** the same repo restructured to an installable `src/simple_multistep_model/` package containing the model algorithm plus three thin chapkit-binding modules — `main.py` (~67 lines), `train.py` (~68 lines), `predict.py` (~31 lines), and `__main__.py` (12 lines for `python -m simple_multistep_model`). A `uv_build`-backed `pyproject.toml`, a Python 3.13 + uv Dockerfile based on `ghcr.io/astral-sh/uv:0.10-python3.13-trixie-slim`, and CI that runs `chapkit test` against the built container. The original positional-arg `train.py` / `predict.py` were removed once the wrapper was verified to produce statistically identical output (mean-of-means within ~0.15% over 216 location/period predictions).
+- **Starting point:** a flat Python repo with `train.py`, `predict.py`, a `chapkit_simple_multistep_model/` package implementing a recursive multistep forecaster (sklearn `RandomForestRegressor` wrapped in skpro `ResidualDouble`), `transformations.py` with feature engineering, and `training_data.csv`. The CLI is `argparse` with positional args (`python train.py training_data.csv model.pkl`).
+- **Ending point:** the same repo restructured to an installable `src/chapkit_simple_multistep_model/` package containing the model algorithm plus three thin chapkit-binding modules — `main.py` (~67 lines), `train.py` (~68 lines), `predict.py` (~31 lines), and `__main__.py` (12 lines for `python -m chapkit_simple_multistep_model`). A `uv_build`-backed `pyproject.toml`, a Python 3.13 + uv Dockerfile based on `ghcr.io/astral-sh/uv:0.10-python3.13-trixie-slim`, and CI that runs `chapkit test` against the built container. The original positional-arg `train.py` / `predict.py` were removed once the wrapper was verified to produce statistically identical output (mean-of-means within ~0.15% over 216 location/period predictions).
 
 Every file path and code snippet in this guide is lifted verbatim from this repository.
 
@@ -152,9 +152,9 @@ The rest of Part A is swapping those placeholders for your real model. Part B co
 
 ## A.3 Customize `main.py`
 
-The scaffold's `main.py` already wires up imports, the `Config` class, two placeholder async callables, `FunctionalModelRunner`, `ArtifactHierarchy`, and `MLServiceBuilder`. You only need to edit four things: config fields, the two callables, service info, and (optionally) the hierarchy name. Each is walked through below, with concrete examples from this repo's [`src/simple_multistep_model/main.py`](../src/simple_multistep_model/main.py).
+The scaffold's `main.py` already wires up imports, the `Config` class, two placeholder async callables, `FunctionalModelRunner`, `ArtifactHierarchy`, and `MLServiceBuilder`. You only need to edit four things: config fields, the two callables, service info, and (optionally) the hierarchy name. Each is walked through below, with concrete examples from this repo's [`src/chapkit_simple_multistep_model/main.py`](../src/chapkit_simple_multistep_model/main.py).
 
-> **Layout note.** This repo eventually moved `main.py` into `src/simple_multistep_model/` with a `uv_build` build backend, plus separate `train.py` and `predict.py` modules. The flat layout the scaffold ships is what you should start with — restructure only when `main.py` actually outgrows itself. See [B.10](#b10-outgrow-the-flat-scaffold-layout-srcuv_build--separate-trainpy--predictpy).
+> **Layout note.** This repo eventually moved `main.py` into `src/chapkit_simple_multistep_model/` with a `uv_build` build backend, plus separate `train.py` and `predict.py` modules. The flat layout the scaffold ships is what you should start with — restructure only when `main.py` actually outgrows itself. See [B.10](#b10-outgrow-the-flat-scaffold-layout-srcuv_build--separate-trainpy--predictpy).
 
 ### A.3.1 Config class
 
@@ -218,11 +218,11 @@ async def on_predict(
 >
 > This is the single most common mistake when migrating a Python model. The `chapkit test` CLI surfaces it as `AttributeError: 'DataFrame' object has no attribute 'sort_values'` on the first training job.
 
-In this repo the two callables live in separate files — [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) and [`src/simple_multistep_model/predict.py`](../src/simple_multistep_model/predict.py) — and the `MultistepConfig` Pydantic class plus the canonical column constants (`INDEX_COLS`, `TARGET_VARIABLE`, `DEFAULT_FEATURES`) live in a sibling [`config.py`](../src/simple_multistep_model/config.py) so neither train nor predict depends on the other. `main.py` just imports and wires them all. That keeps each module focused: `config.py` is the schema, `train.py` is the training callable, `predict.py` is the prediction callable, `main.py` is service composition. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
+In this repo the two callables live in separate files — [`src/chapkit_simple_multistep_model/train.py`](../src/chapkit_simple_multistep_model/train.py) and [`src/chapkit_simple_multistep_model/predict.py`](../src/chapkit_simple_multistep_model/predict.py) — and the `MultistepConfig` Pydantic class plus the canonical column constants (`INDEX_COLS`, `TARGET_VARIABLE`, `DEFAULT_FEATURES`) live in a sibling [`config.py`](../src/chapkit_simple_multistep_model/config.py) so neither train nor predict depends on the other. `main.py` just imports and wires them all. That keeps each module focused: `config.py` is the schema, `train.py` is the training callable, `predict.py` is the prediction callable, `main.py` is service composition. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
 
 ```python
 from chapkit.data import DataFrame as ChapDataFrame
-from simple_multistep_model import DataFrameMultistepModel, SkproWrapper
+from chapkit_simple_multistep_model import DataFrameMultistepModel, SkproWrapper
 from transformations import transform_data
 from sklearn.ensemble import RandomForestRegressor
 from skpro.regression.residual import ResidualDouble
@@ -304,7 +304,7 @@ The scaffold ships this; you just rename the type parameter to your config class
 from chapkit.api import AssessedStatus, MLServiceInfo, ModelMetadata, PeriodType
 
 info = MLServiceInfo(
-    id="chapkit-simple-multistep-template",
+    id="chapkit-simple-multistep-model",
     display_name="Simple Multistep Model (chapkit)",
     version="0.1.0",
     description=(
@@ -343,7 +343,7 @@ The scaffold ships a reasonable default:
 from chapkit.artifact import ArtifactHierarchy
 
 hierarchy = ArtifactHierarchy(
-    name="simple_multistep_model",
+    name="chapkit_simple_multistep_model",
     level_labels={0: "ml_training_workspace", 1: "ml_prediction"},
 )
 ```
@@ -439,7 +439,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 WORKDIR /app
 
 COPY --chown=root:root pyproject.toml uv.lock README.md ./
-COPY --chown=root:root simple_multistep_model ./simple_multistep_model
+COPY --chown=root:root chapkit_simple_multistep_model ./chapkit_simple_multistep_model
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
@@ -448,7 +448,7 @@ COPY --chown=root:root main.py transformations.py ./
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev && \
-    python -m compileall -q simple_multistep_model
+    python -m compileall -q chapkit_simple_multistep_model
 
 RUN mkdir -p /app/data && chown chap:chap /app/data
 
@@ -565,7 +565,7 @@ os.environ.setdefault(
 )
 
 from fastapi.testclient import TestClient  # noqa: E402
-from simple_multistep_model.main import app  # noqa: E402
+from chapkit_simple_multistep_model.main import app  # noqa: E402
 
 @pytest.fixture(scope="session")
 def client():
@@ -635,17 +635,17 @@ Environment variables:
 
 ## B.8 `train` and `predict` console scripts (future shell-runner readiness)
 
-Even though this repo uses `FunctionalModelRunner`, exposing `train` and `predict` as console-script entry points (via `[project.scripts]`) costs almost nothing and makes a future swap to `ShellModelRunner` a one-line change in `main.py`. See [`src/simple_multistep_model/cli.py`](../src/simple_multistep_model/cli.py) for the pattern:
+Even though this repo uses `FunctionalModelRunner`, exposing `train` and `predict` as console-script entry points (via `[project.scripts]`) costs almost nothing and makes a future swap to `ShellModelRunner` a one-line change in `main.py`. See [`src/chapkit_simple_multistep_model/cli.py`](../src/chapkit_simple_multistep_model/cli.py) for the pattern:
 
 ```toml
 # pyproject.toml
 [project.scripts]
-train = "simple_multistep_model.cli:train_cli"
-predict = "simple_multistep_model.cli:predict_cli"
+train = "chapkit_simple_multistep_model.cli:train_cli"
+predict = "chapkit_simple_multistep_model.cli:predict_cli"
 ```
 
 ```python
-# src/simple_multistep_model/cli.py
+# src/chapkit_simple_multistep_model/cli.py
 def train_cli() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", required=True)
@@ -700,9 +700,9 @@ my-model/
 ├── docs/
 ├── tests/
 └── src/
-    └── simple_multistep_model/
+    └── chapkit_simple_multistep_model/
         ├── __init__.py
-        ├── __main__.py            # `python -m simple_multistep_model` -> uvicorn
+        ├── __main__.py            # `python -m chapkit_simple_multistep_model` -> uvicorn
         ├── main.py                # service composition (info, hierarchy, builder)
         ├── config.py              # MultistepConfig + canonical column constants
         ├── train.py               # on_train
@@ -720,13 +720,13 @@ requires = ["uv_build>=0.5,<0.12"]
 build-backend = "uv_build"
 
 [project]
-name = "simple_multistep_model"
+name = "chapkit_simple_multistep_model"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = ["chapkit>=0.17.1", "numpy", "pandas", "xarray", "scikit-learn", "skpro"]
 ```
 
-`uv_build` auto-detects `src/<package_name>/` so no extra config is required. After moving files in, run `uv lock && uv sync`. `from simple_multistep_model.main import app` then works from anywhere — including the pytest TestClient fixture in B.4.
+`uv_build` auto-detects `src/<package_name>/` so no extra config is required. After moving files in, run `uv lock && uv sync`. `from chapkit_simple_multistep_model.main import app` then works from anywhere — including the pytest TestClient fixture in B.4.
 
 Inside the package, switch to relative imports (`from . import DataFrameMultistepModel`, `from .transformations import transform_data`) so the modules are decoupled from the install layout.
 
@@ -745,7 +745,7 @@ import uvicorn
 
 def main() -> None:
     uvicorn.run(
-        "simple_multistep_model.main:app",
+        "chapkit_simple_multistep_model.main:app",
         host=os.getenv("HOST", "0.0.0.0"),
         port=int(os.getenv("PORT", "8000")),
         reload=False,
@@ -756,7 +756,7 @@ if __name__ == "__main__":
     main()
 ```
 
-The Dockerfile `CMD` then becomes a one-liner: `CMD ["python", "-m", "simple_multistep_model"]`.
+The Dockerfile `CMD` then becomes a one-liner: `CMD ["python", "-m", "chapkit_simple_multistep_model"]`.
 
 None of this is required to ship a chapkit service. Defer it until `main.py` is genuinely too big or you want pytest-driven testing (B.4) — then do the whole restructure in one commit.
 
@@ -800,13 +800,13 @@ The canonical worked example for every section above.
 
 | File | What to look at |
 |---|---|
-| [`src/simple_multistep_model/main.py`](../src/simple_multistep_model/main.py) | Service composition — info, hierarchy, builder. Imports `on_train` / `on_predict` from sibling modules |
-| [`src/simple_multistep_model/__main__.py`](../src/simple_multistep_model/__main__.py) | `python -m simple_multistep_model` entry point (uvicorn boot) |
-| [`src/simple_multistep_model/config.py`](../src/simple_multistep_model/config.py) | `MultistepConfig` (Pydantic) + canonical column constants — imported by both `train.py` and `predict.py` |
-| [`src/simple_multistep_model/train.py`](../src/simple_multistep_model/train.py) | `on_train` callable |
-| [`src/simple_multistep_model/predict.py`](../src/simple_multistep_model/predict.py) | `on_predict` callable |
-| [`src/simple_multistep_model/multistep.py`](../src/simple_multistep_model/multistep.py), [`one_step_model.py`](../src/simple_multistep_model/one_step_model.py) | The model algorithm itself — pure pandas / xarray, no chapkit dependency |
-| [`src/simple_multistep_model/transformations.py`](../src/simple_multistep_model/transformations.py) | Feature-engineering helpers (lag features + one-hot location) |
+| [`src/chapkit_simple_multistep_model/main.py`](../src/chapkit_simple_multistep_model/main.py) | Service composition — info, hierarchy, builder. Imports `on_train` / `on_predict` from sibling modules |
+| [`src/chapkit_simple_multistep_model/__main__.py`](../src/chapkit_simple_multistep_model/__main__.py) | `python -m chapkit_simple_multistep_model` entry point (uvicorn boot) |
+| [`src/chapkit_simple_multistep_model/config.py`](../src/chapkit_simple_multistep_model/config.py) | `MultistepConfig` (Pydantic) + canonical column constants — imported by both `train.py` and `predict.py` |
+| [`src/chapkit_simple_multistep_model/train.py`](../src/chapkit_simple_multistep_model/train.py) | `on_train` callable |
+| [`src/chapkit_simple_multistep_model/predict.py`](../src/chapkit_simple_multistep_model/predict.py) | `on_predict` callable |
+| [`src/chapkit_simple_multistep_model/multistep.py`](../src/chapkit_simple_multistep_model/multistep.py), [`one_step_model.py`](../src/chapkit_simple_multistep_model/one_step_model.py) | The model algorithm itself — pure pandas / xarray, no chapkit dependency |
+| [`src/chapkit_simple_multistep_model/transformations.py`](../src/chapkit_simple_multistep_model/transformations.py) | Feature-engineering helpers (lag features + one-hot location) |
 | [`pyproject.toml`](../pyproject.toml) | `uv_build` build backend, chapkit + sklearn + skpro deps, src layout |
 | [`Dockerfile`](../Dockerfile) | Single-stage Python 3.13 + uv image (chap-core style) — alternative to the scaffold's multi-stage default |
 | [`Makefile`](../Makefile) | `build`, `run`, `run-ghcr`, `test`, `lint` (auto-fix), `check` (CI) targets |
