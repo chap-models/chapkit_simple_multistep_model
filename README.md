@@ -25,12 +25,19 @@ curl http://localhost:8000/api/v1/info
 ```
 make run            # docker compose up (foreground, builds if needed)
 make run-ghcr       # pull prebuilt image from GHCR
-make test           # run `chapkit test` against the running service
 ```
+
+## Test
+
+```
+make test           # pytest end-to-end (in-process via FastAPI TestClient)
+```
+
+`tests/test_smoke.py` drives the chapkit ASGI app directly through Starlette's `TestClient` — no docker, no port, no `make run` required. It posts `historic_data.csv` to `$train`, `future_data.csv` to `$predict`, downloads the prediction artifact, and asserts shape + sane mean. Runs in ~3s on a fresh in-memory SQLite scratch dir.
 
 ### Note on `chapkit test`
 
-`chapkit test` injects synthetic test data with only **2 historic periods** at predict time. The model defaults to `n_target_lags=6`, so the lag window is shorter than expected. The model handles this by left-padding `previous_y` with zeros — the synthetic zeros propagate out of the lag window after a few recursive steps, and `chapkit test` passes. If you need a stricter contract (e.g. enforce `len(previous_y) >= n_target_lags`), tighten the validation in `simple_multistep_model.multistep._pad_or_trim`.
+`chapkit test` (the bundled CLI smoke runner) injects synthetic data with only **2 historic periods** per location at predict time and a configurable but fixed location count. With `n_target_lags=6` the lag window underflows; with location-conditional one-hot encoding the column count drifts between train and predict. Both are real shape mismatches under that synthetic contract, but neither reflects how this model is meant to be used in production. Rather than patching the model around them, this repo ships its own pytest smoke against `example_data/` (which has 140 historic periods × 18 locations).
 
 ## Layout
 

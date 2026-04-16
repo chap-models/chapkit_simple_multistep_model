@@ -65,5 +65,4 @@ async def on_train(
     one_step = SkproWrapper(skpro_model)
     model = DataFrameMultistepModel(one_step, config.n_target_lags, TARGET_VARIABLE)
     model.fit(X, y)
-    model.feature_columns_ = [c for c in X.columns if c not in INDEX_COLS]
     return model

@@ -26,9 +26,6 @@ async def on_predict(
     features = pd.concat([historic_df[cols], future_df[cols]], ignore_index=True)
     features = features.sort_values(by=["time_period", "location"])
     X = transform_data(features)
-    train_feature_cols = getattr(model, "feature_columns_", None)
-    if train_feature_cols is not None:
-        X = X.reindex(columns=INDEX_COLS + train_feature_cols, fill_value=0.0)
     y_historic = historic_df[INDEX_COLS + [TARGET_VARIABLE]]
     predictions = model.predict(y_historic, X, n_steps, config.n_samples)
     return ChapDataFrame.from_pandas(predictions)

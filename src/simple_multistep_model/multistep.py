@@ -48,19 +48,6 @@ class DeterministicOneStepModel(Protocol):
 # ---------------------------------------------------------------------------
 
 
-def _pad_or_trim(previous_y: np.ndarray, n_target_lags: int) -> np.ndarray:
-    """Return previous_y trimmed or left-padded with zeros to length n_target_lags.
-
-    Padding is needed when the caller has fewer historic observations than the
-    model's lag window — the synthetic zeros sit at the oldest positions and
-    naturally drop out of the recursive lag window after a few prediction steps.
-    """
-    arr = np.asarray(previous_y)
-    if len(arr) >= n_target_lags:
-        return arr[-n_target_lags:]
-    return np.concatenate([np.zeros(n_target_lags - len(arr), dtype=arr.dtype), arr])
-
-
 def _build_lag_matrix_xr(y: xr.DataArray, n_lags: int) -> xr.DataArray:
     """Build lag matrix from DataArray with a time dim.
 
@@ -349,16 +336,13 @@ class MultistepModel:
         """Return a lazy MultistepDistribution for recursive sampling.
 
         Args:
-            previous_y: Most recent observed values, shape (>= 1,), newest last. If
-                shorter than ``n_target_lags`` it is left-padded with zeros so the
-                model still produces predictions; the zeros propagate out of the
-                lag window after a few recursive steps.
+            previous_y: Most recent observed values, shape (n_target_lags,), newest last.
             n_steps: Number of steps to forecast.
             X: Known future exogenous features, shape (n_steps, n_features) or None.
         """
         return MultistepDistribution(
             model=self.one_step_model,
-            previous_y=_pad_or_trim(previous_y, self.n_target_lags),
+            previous_y=previous_y[-self.n_target_lags :],
             n_steps=n_steps,
             n_target_lags=self.n_target_lags,
             X=X,
@@ -533,15 +517,14 @@ class DeterministicMultistepModel:
         """Generate deterministic multi-step forecast.
 
         Args:
-            previous_y: Recent observations, shape (>= 1,). Left-padded with zeros
-                if shorter than ``n_target_lags``.
+            previous_y: Recent observations, shape (>= n_target_lags,).
             n_steps: Number of forecast steps.
             X: Known future exogenous features, shape (n_steps, n_features) or None.
 
         Returns:
             Array of shape (n_steps,) with point predictions.
         """
-        lag_window = _pad_or_trim(previous_y, self.n_target_lags).astype(float)
+        lag_window = previous_y[-self.n_target_lags :].copy().astype(float)
         results = []
         for step in range(n_steps):
             if X is not None:

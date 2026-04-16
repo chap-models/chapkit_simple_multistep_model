@@ -583,12 +583,12 @@ This is the gate — if a basic train + predict cycle succeeds, your required mi
 
    This creates a config, submits one training job, submits one prediction job, and polls for completion. On slow models bump `--timeout` (default 60s).
 
-   > **Heads up — `chapkit test` data shape.** The synthetic data `chapkit test` generates is deliberately tiny: by default 100 rows total, 5 locations, ~20 train periods, and only **2 historic periods + 2 future periods** at predict time. Two model assumptions commonly break under this:
+   > **Heads up — `chapkit test` synthetic data shape.** The data `chapkit test` generates is deliberately tiny: by default 100 rows total, 5 locations, ~20 train periods, and only **2 historic periods + 2 future periods** at predict time. Two model assumptions commonly break under that contract: lag windows longer than 2 (`n_target_lags=6` is the default in this repo), and location-conditional features (one-hot encoding produces a different column count when train and predict see different location sets). Both are real shape mismatches under the synthetic contract, but neither reflects how a forecasting model is meant to be used in production. Two paths to deal with this:
    >
-   > 1. **Location-conditional features.** If train sees N locations and predict sees M ≠ N, any one-hot location encoding produces a different column count. Fix in the chapkit binding: capture the post-transform feature column list at train time (`model.feature_columns_ = [...]`) and `X.reindex(columns=...)` in predict.
-   > 2. **Lag windows longer than predict history.** A model with `n_target_lags=6` expects 6 historic periods per location, but `chapkit test` only sends 2. Either left-pad the `previous_y` array with zeros (this repo's choice — see `multistep._pad_or_trim`), or lower `n_target_lags`'s default to something `chapkit test` always satisfies.
+   > 1. **Patch the model to be robust to those shapes** — left-pad `previous_y` with zeros, capture the post-transform column list at train time and reindex on predict. Cheap, but bakes chapkit-test-specific behavior into the model.
+   > 2. **Skip `chapkit test` entirely and write your own pytest smoke** that posts `example_data/` against the chapkit FastAPI app. This repo took this path — see `tests/test_smoke.py` and the `make test` target. Because chapkit is built on FastAPI, the smoke uses Starlette's `TestClient` to drive the ASGI app in-process — no docker, no port, no separate `make run` shell required. The same pytest is what CI runs.
    >
-   > These are **model robustness fixes**, not chapkit bugs. After both are in place, `chapkit test` passes. For a more realistic train + predict verification on real data, see the parity-check pattern in B.4.
+   > Pick whichever fits — neither is wrong. If you go the pytest route, leave `chapkit test` as a tool you invoke ad-hoc when you want a quick API contract probe.
 
 6. Build the container and rerun step 5 against it:
 

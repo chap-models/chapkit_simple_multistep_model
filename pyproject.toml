@@ -1,5 +1,5 @@
 [build-system]
-requires = ["uv_build>=0.5"]
+requires = ["uv_build>=0.5,<0.12"]
 build-backend = "uv_build"
 
 [project]
@@ -23,8 +23,13 @@ predict = "simple_multistep_model.cli:predict_cli"
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.4.1",
     "ruff>=0.15.10",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py313"
