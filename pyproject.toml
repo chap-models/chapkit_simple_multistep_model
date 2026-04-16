@@ -9,12 +9,12 @@ description = "Multistep recursive forecasting model exposed as a chapkit servic
 requires-python = ">=3.13"
 dependencies = [
     "chapkit>=0.17.1",
-    "numpy",
-    "pandas",
-    "pyyaml",
-    "xarray",
-    "scikit-learn",
-    "skpro",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "pyyaml>=6.0.3",
+    "scikit-learn>=1.7.2",
+    "skpro>=2.12.0",
+    "xarray>=2026.4.0",
 ]
 
 [project.scripts]
@@ -24,7 +24,7 @@ predict = "simple_multistep_model.cli:predict_cli"
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
-    "pytest>=8.4.1",
+    "pytest>=9.0.3",
     "ruff>=0.15.10",
 ]
 
