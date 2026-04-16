@@ -6,6 +6,7 @@ def one_hot_encode_locations(df: pd.DataFrame) -> pd.DataFrame:
     dummies = pd.get_dummies(df["location"], prefix="loc").astype(float)
     return pd.concat([df, dummies], axis=1)
 
+
 def lag_all_features(df: pd.DataFrame, min_lag: int = 1, max_lag: int = 3) -> pd.DataFrame:
     """Add lagged versions of all non-index columns, computed per location.
 
@@ -24,6 +25,7 @@ def lag_all_features(df: pd.DataFrame, min_lag: int = 1, max_lag: int = 3) -> pd
     df = df.drop(columns=feature_cols)
     return df
 
+
 def add_lagged_targets(X: pd.DataFrame, y, min_lag: int = 1, max_lag: int = 3) -> pd.DataFrame:
     """Add lagged target values as features, computed per location.
 
@@ -40,10 +42,9 @@ def add_lagged_targets(X: pd.DataFrame, y, min_lag: int = 1, max_lag: int = 3) -
 
 
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
-    '''
+    """
     This is the transformation function imported from train and predict
-    '''
+    """
     df = lag_all_features(df)
     df = one_hot_encode_locations(df)
     return df
-

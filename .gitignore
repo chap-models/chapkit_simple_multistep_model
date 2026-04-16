@@ -1,1 +1,54 @@
 node_modules/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv
+venv/
+env/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database / chapkit runtime
+data/
+target/
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+
+# Ruff / type checkers
+.ruff_cache/
+.mypy_cache/
+.pyright/
+
+# Local model artifacts (smoke tests, parity checks)
+*.pkl
+*.pickle
+predictions*.csv
+!example_data/predictions*.csv

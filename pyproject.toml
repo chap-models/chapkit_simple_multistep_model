@@ -1,18 +1,40 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["uv_build>=0.5"]
+build-backend = "uv_build"
 
 [project]
 name = "simple_multistep_model"
 version = "0.1.0"
-description = "Pedagogical multistep recursive forecasting model"
-requires-python = ">=3.10"
+description = "Multistep recursive forecasting model exposed as a chapkit service"
+requires-python = ">=3.13"
 dependencies = [
+    "chapkit>=0.17.1",
     "numpy",
     "pandas",
+    "pyyaml",
     "xarray",
     "scikit-learn",
     "skpro",
-    "cyclopts",
-    "matplotlib>=3.10.8",
 ]
+
+[project.scripts]
+train = "simple_multistep_model.cli:train_cli"
+predict = "simple_multistep_model.cli:predict_cli"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.10",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+
+[tool.ruff.lint]
+fixable = ["ALL"]
+select = ["E", "W", "F", "I"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
