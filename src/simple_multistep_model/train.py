@@ -63,7 +63,7 @@ async def on_train(
     regressor = RandomForestRegressor(
         max_depth=config.rf_max_depth,
         min_samples_leaf=config.rf_min_samples_leaf,
-        max_features="sqrt",
+        max_features="sqrt",  # type: ignore[arg-type]  # sklearn stub omits Literal["sqrt","log2"]
     )
     skpro_model = ResidualDouble(regressor)
     one_step = SkproWrapper(skpro_model)
