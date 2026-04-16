@@ -176,18 +176,17 @@ def _predictions_to_dataframe(predictions: xr.DataArray, future_df=None):
     locations = predictions.coords["location"].values
 
     # Build a mapping from (location, step_idx) -> time_period string
+    time_lookup: dict[str, list[str]] | None = None
     if future_df is not None:
         df = future_df.copy()
         original_times = df["time_period"].astype(str)
         df["_original_time"] = original_times
         df["time_period"] = pd.to_datetime(df["time_period"])
-        time_lookup: dict[str, list[str]] = {}
+        time_lookup = {}
         for loc in locations:
             loc_str = str(loc)
             loc_subset = df[df["location"] == loc_str].sort_values("time_period")
             time_lookup[loc_str] = loc_subset["_original_time"].values.tolist()
-    else:
-        time_lookup = None
 
     rows = []
     for loc in locations:
@@ -443,6 +442,8 @@ class DataFrameMultistepModel:
         previous_y = y_xr.isel(time=slice(-self._model.n_target_lags, None))
 
         X_xr = features_to_xarray(X)
+        if X_xr is None:
+            raise ValueError("X must contain at least one feature column beyond time_period and location")
         # Slice to keep only the last n_steps time periods (the future)
         X_future_xr = X_xr.isel(time=slice(-n_steps, None)).rename({"time": "step"})
         # Also slice the DataFrame for time_period strings in output

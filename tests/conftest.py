@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,7 @@ EXAMPLE_DATA = REPO_ROOT / "example_data"
 
 
 @pytest.fixture(scope="session")
-def client() -> TestClient:
+def client() -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
 

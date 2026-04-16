@@ -107,5 +107,5 @@ def test_train_and_predict_against_example_data(client: TestClient, example_data
     assert len(sample_cols) == 50
     assert set(preds["location"]) == set(future["location"])
 
-    mean = preds[sample_cols].values.mean()
+    mean = preds[sample_cols].to_numpy().mean()
     assert 10.0 < mean < 500.0, f"prediction mean {mean:.2f} outside plausible range"
