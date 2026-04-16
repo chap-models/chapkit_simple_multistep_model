@@ -123,17 +123,17 @@ The `--template` flag picks the scaffold shape:
 
 ### What the scaffold generates
 
-For `--template ml` you will get a flat layout something like:
+For `--template ml` you will get a flat layout, exactly seven files:
 
 ```
 my-model/
 ├── main.py                  # chapkit service definition with placeholder on_train/on_predict
-├── pyproject.toml           # pinned chapkit dep
-├── Dockerfile               # Python 3.13 + uv multi-stage image
-├── compose.yml              # local build + run
+├── pyproject.toml           # pinned chapkit dep + dev group with uvicorn[standard]
+├── Dockerfile               # multi-stage Python 3.13 + uv builder, gunicorn+uvicorn worker, urllib healthcheck, non-root
+├── compose.yml              # local build + run with named volume, healthcheck, restart policy, bridge network
 ├── README.md                # per-project quickstart
-├── postman_collection.json  # importable API collection
-└── .gitignore
+├── postman_collection.json  # importable API collection (bonus)
+└── .gitignore               # Python defaults
 ```
 
 Then:
@@ -146,92 +146,15 @@ uv run uvicorn main:app
 
 The skeleton boots and serves on `:8000`. Hit `http://localhost:8000/health` to confirm.
 
-At this point you have a working chapkit service using a placeholder `on_train` (e.g. `LinearRegression().fit(...)`) and a placeholder `on_predict`. The rest of Part A is replacing those with your real model.
+The placeholder `on_train` computes per-column means; `on_predict` returns the average of those means as a single `sample_0` value for every future row. Trivial, but enough that **the pristine scaffold passes `chapkit test` out of the box** (verified) — useful as a sanity check before you start replacing things.
 
-### Recommended: convert to a `src/` layout with `uv_build`
-
-The flat scaffold is fine for the smallest models, but real ones grow into a model package + several glue modules. This repo uses an installable `src/` layout with the [`uv_build`](https://docs.astral.sh/uv/concepts/projects/build/) build backend so that `train.py`, `predict.py`, `main.py`, and the model package all live inside `src/<your_package>/` and can `from . import …` each other cleanly. The shape:
-
-```
-my-model/
-├── pyproject.toml
-├── uv.lock
-├── Dockerfile
-├── compose.yml
-├── compose.ghcr.yml
-├── Makefile
-├── README.md
-├── example_data/
-│   ├── training_data.csv
-│   ├── historic_data.csv
-│   └── future_data.csv
-├── docs/
-│   └── migration-to-chapkit.md
-└── src/
-    └── simple_multistep_model/
-        ├── __init__.py
-        ├── __main__.py            # `python -m simple_multistep_model` -> uvicorn
-        ├── main.py                # service composition (info, hierarchy, builder)
-        ├── train.py               # MultistepConfig + on_train
-        ├── predict.py             # on_predict
-        ├── multistep.py           # MultistepModel and friends (the algorithm)
-        ├── one_step_model.py      # SkproWrapper, ResidualBootstrapModel
-        └── transformations.py     # feature engineering helpers
-```
-
-`pyproject.toml` switches to `uv_build`:
-
-```toml
-[build-system]
-requires = ["uv_build>=0.5"]
-build-backend = "uv_build"
-
-[project]
-name = "simple_multistep_model"
-version = "0.1.0"
-requires-python = ">=3.13"
-dependencies = ["chapkit>=0.17.1", "numpy", "pandas", "xarray", "scikit-learn", "skpro"]
-
-[dependency-groups]
-dev = ["ruff>=0.15.10"]
-```
-
-`uv_build` auto-detects `src/<package_name>/` so no extra config is required. After moving files in, run:
-
-```
-uv lock
-uv sync
-```
-
-`uv sync` builds and installs your package into the venv, so `from simple_multistep_model.main import app` works from anywhere.
-
-### `__main__.py` for `python -m`
-
-A 12-line `src/simple_multistep_model/__main__.py` lets contributors and Docker boot the service with `python -m simple_multistep_model` instead of memorizing the uvicorn invocation:
-
-```python
-import os
-import uvicorn
-
-
-def main() -> None:
-    uvicorn.run(
-        "simple_multistep_model.main:app",
-        host=os.getenv("HOST", "0.0.0.0"),
-        port=int(os.getenv("PORT", "8000")),
-        reload=False,
-    )
-
-
-if __name__ == "__main__":
-    main()
-```
-
-The Dockerfile `CMD` then becomes a one-liner: `CMD ["python", "-m", "simple_multistep_model"]`.
+The rest of Part A is swapping those placeholders for your real model. Part B covers optional structural improvements you typically reach for once your codebase outgrows a single `main.py` (src layout, separate train/predict modules, console scripts, etc.).
 
 ## A.3 Customize `main.py`
 
-The scaffold's `main.py` already wires up imports, the `Config` class, two placeholder async callables, `FunctionalModelRunner`, `ArtifactHierarchy`, and `MLServiceBuilder`. You only need to edit four things: config fields, the two callables, service info, and (optionally) the hierarchy name. Each is walked through below, with concrete examples from this repo's [`main.py`](../main.py).
+The scaffold's `main.py` already wires up imports, the `Config` class, two placeholder async callables, `FunctionalModelRunner`, `ArtifactHierarchy`, and `MLServiceBuilder`. You only need to edit four things: config fields, the two callables, service info, and (optionally) the hierarchy name. Each is walked through below, with concrete examples from this repo's [`src/simple_multistep_model/main.py`](../src/simple_multistep_model/main.py).
+
+> **Layout note.** This repo eventually moved `main.py` into `src/simple_multistep_model/` with a `uv_build` build backend, plus separate `train.py` and `predict.py` modules. The flat layout the scaffold ships is what you should start with — restructure only when `main.py` actually outgrows itself. See [B.10](#b10-outgrow-the-flat-scaffold-layout-srcuv_build--separate-trainpy--predictpy).
 
 ### A.3.1 Config class
 
@@ -458,12 +381,12 @@ app = (
 
 Leave the rest untouched unless you need a different persistence backend.
 
-## A.4 Move your model code into the scaffold
+## A.4 Bring your model code into the scaffold
 
-You have two ergonomic choices for combining the scaffold with your existing repo:
+The most natural workflow when starting from `chapkit init`:
 
-1. **Treat the scaffold as the new repo.** Copy your Python package, helper modules, and any other assets into the scaffolded project and commit from there. Push to a new repo or replace the old one.
-2. **Copy the scaffold into your existing repo.** Cherry-pick `main.py`, `pyproject.toml`, `Dockerfile`, `compose.yml`, and `.github/` out of the scaffold and paste them into your existing repo alongside your model package. This is what this repo did.
+1. **Treat the scaffold as the new repo.** Copy your Python package, helper modules, and any other assets your model needs into the scaffolded project. Add their import deps to `pyproject.toml` (`uv add scikit-learn skpro pandas xarray ...`), commit, push to a new git repo. This is the path the rest of the guide assumes.
+2. **Copy the scaffold into your existing repo.** Cherry-pick `main.py`, `pyproject.toml`, `Dockerfile`, `compose.yml`, and `.gitignore` out of the scaffold and paste them into your existing repo alongside your model package. Useful when you have substantial git history to preserve. (This repo took this path.)
 
 Either way, remove every file that existed only to run the old non-chapkit pipeline:
 
@@ -474,11 +397,24 @@ Either way, remove every file that existed only to run the old non-chapkit pipel
 
 Keep: your model package, transformation helpers, example data inputs, and anything `main.py` imports at runtime.
 
-## A.5 Replace the Dockerfile
+## A.5 Adjust the Dockerfile (usually nothing to do)
 
-The scaffolded Dockerfile is a multi-stage Python 3.13 + uv image with `gunicorn` + `uvicorn` workers. For most pure-Python models this is exactly what you want — it just needs minor edits (image name, port, healthcheck).
+The scaffolded Dockerfile is **production-ready out of the box**: multi-stage uv builder + `python:3.13-slim` runtime, gunicorn + uvicorn worker, healthcheck via `urllib.request` (no curl dep), non-root user, OCI labels, environment knobs for workers / timeout / log format. You typically don't need to touch it for a pure-Python model — `docker compose up --build` just works.
 
-If you want a **simpler single-stage image** in the style of [`chap-core`](https://github.com/dhis2/chap-core), use the Dockerfile shipped with this repo as a reference ([`Dockerfile`](../Dockerfile)):
+Only edit it when you have a specific reason:
+
+- **Native build deps** — your model needs C/Fortran extensions that don't ship as wheels (e.g. some scientific libraries):
+  ```dockerfile
+  RUN apt-get install -y --no-install-recommends build-essential gfortran libopenblas-dev
+  ```
+  Add this in the `builder` stage before `uv sync`.
+- **GPU support** — swap the base image for an NVIDIA CUDA + Python 3.13 image and add the appropriate extras to `pyproject.toml`.
+- **amd64-only native deps** — pin `--platform=linux/amd64` (and add `platform: linux/amd64` to `compose.yml`).
+- **Personal preference for a simpler / smaller single-stage image** — see the alternative below. This repo took that route, but the scaffold's multi-stage image is equally valid and arguably more production-shaped.
+
+### Alternative: single-stage in the style of chap-core
+
+If you prefer the [`chap-core`](https://github.com/dhis2/chap-core) Dockerfile shape — single stage, direct `uvicorn` CMD, fewer layers — this repo ships one as a reference ([`Dockerfile`](../Dockerfile)):
 
 ```dockerfile
 FROM ghcr.io/astral-sh/uv:0.10-python3.13-trixie-slim
@@ -527,79 +463,62 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT}"]
 ```
 
-### Key structural choices
+Differences from the scaffolded multi-stage Dockerfile:
 
-- **Single stage** instead of builder + runtime split. For model-serving images the separation is rarely worth the added complexity.
-- **`uv sync --frozen` driven by `uv.lock`** — fast and reproducible. Run `uv lock` after every dependency change and commit the lockfile.
-- **Two-step copy** to maximize Docker layer caching: model package first (changes rarely), then `main.py` + thin glue modules (change often).
-- **Non-root user (`chap`)**, healthcheck, and `tini` as init — production hardening cribbed from chap-core's Dockerfile.
-- **Direct `uvicorn` CMD** instead of gunicorn+workers. Simpler to debug, good enough for model workloads. Switch to gunicorn (`exec gunicorn -k uvicorn.workers.UvicornWorker main:app ...`) when you want multi-worker prefork.
-
-### Things to adapt for your specific model
-
-- Swap the `simple_multistep_model` and `transformations.py` paths for your package and helpers.
-- If your model needs C/Fortran extensions that don't ship as wheels (e.g. some scientific libraries), add the build deps before the `uv sync` step:
-  ```dockerfile
-  RUN apt-get install -y --no-install-recommends build-essential gfortran libopenblas-dev
-  ```
-- If you need GPU support, swap the base image for an NVIDIA CUDA + Python 3.13 image and add the appropriate `pip` extras to `pyproject.toml`.
-- Pin `--platform=linux/amd64` only if one of your native dependencies is amd64-only.
+- **Single stage** instead of builder + runtime split — fewer moving parts, comparable image size for typical Python ML deps.
+- **Direct `uvicorn` CMD** instead of gunicorn + worker config — simpler to debug; switch back to gunicorn when you want multi-worker prefork.
+- **`uv sync --frozen` driven by `uv.lock`** — same as the scaffold; run `uv lock` after every dep change and commit the lockfile.
+- **Two-step copy** for layer caching: model package first (changes rarely), then thin glue modules (change often).
+- **Non-root user, healthcheck, `tini` as init** — same production hardening as the scaffold, just expressed differently.
 
 ## A.6 Verify the migration
 
 This is the gate — if a basic train + predict cycle succeeds, your required migration is done.
 
-1. Sync Python deps:
+1. Sync deps and start the service:
 
    ```
    uv sync
-   ```
-
-2. Start the service locally:
-
-   ```
    uv run uvicorn main:app --host 0.0.0.0 --port 8000
    ```
 
-3. In another shell, hit `/health`:
+2. In another shell, hit `/health` and `/api/v1/info`:
 
    ```
-   curl http://localhost:8000/health
+   curl http://localhost:8000/health        # {"status":"healthy", ...}
+   curl http://localhost:8000/api/v1/info   # should reflect your MLServiceInfo
    ```
 
-   Expect `{"status":"healthy", ...}`.
-
-4. Inspect `/api/v1/info` and confirm it reflects your `MLServiceInfo`:
-
-   ```
-   curl http://localhost:8000/api/v1/info
-   ```
-
-5. Run the built-in end-to-end test. Because you are now inside a chapkit project, the `chapkit` CLI exposes the `test` subcommand:
+3. Run the built-in end-to-end test. Inside a chapkit project the CLI exposes the `test` subcommand:
 
    ```
    chapkit test --url http://localhost:8000 --verbose
    ```
 
-   This creates a config, submits one training job, submits one prediction job, and polls for completion. On slow models bump `--timeout` (default 60s).
+   This creates a config, submits one training job, submits one prediction job, and polls for completion. On slow models bump `--timeout` (default 60s). The pristine scaffold passes this; if your real model fails it, see the heads-up below.
 
-   > **Heads up — `chapkit test` synthetic data shape.** The data `chapkit test` generates is deliberately tiny: by default 100 rows total, 5 locations, ~20 train periods, and only **2 historic periods + 2 future periods** at predict time. Two model assumptions commonly break under that contract: lag windows longer than 2 (`n_target_lags=6` is the default in this repo), and location-conditional features (one-hot encoding produces a different column count when train and predict see different location sets). Both are real shape mismatches under the synthetic contract, but neither reflects how a forecasting model is meant to be used in production. Two paths to deal with this:
+   > **Heads up — `chapkit test` synthetic data shape.** The data `chapkit test` generates is deliberately tiny: by default 100 rows total, 5 locations, ~20 train periods, and only **2 historic periods + 2 future periods** at predict time. Two real-model assumptions commonly break under that contract:
    >
-   > 1. **Patch the model to be robust to those shapes** — left-pad `previous_y` with zeros, capture the post-transform column list at train time and reindex on predict. Cheap, but bakes chapkit-test-specific behavior into the model.
-   > 2. **Skip `chapkit test` entirely and write your own pytest smoke** that posts `example_data/` against the chapkit FastAPI app. This repo took this path — see `tests/test_smoke.py` and the `make test` target. Because chapkit is built on FastAPI, the smoke uses Starlette's `TestClient` to drive the ASGI app in-process — no docker, no port, no separate `make run` shell required. The same pytest is what CI runs.
+   > 1. **Lag windows longer than 2.** A model with `n_target_lags=6` expects 6 historic periods per location, but `chapkit test` only sends 2.
+   > 2. **Location-conditional features.** One-hot encoding produces a different column count when train and predict see different location sets.
    >
-   > Pick whichever fits — neither is wrong. If you go the pytest route, leave `chapkit test` as a tool you invoke ad-hoc when you want a quick API contract probe.
+   > Both are real shape mismatches under the synthetic contract, but neither reflects how a forecasting model is meant to be used in production. Two paths to deal with this:
+   >
+   > - **Patch the model to be robust to those shapes** — left-pad `previous_y` with zeros, capture the post-transform column list at train time and reindex on predict. Cheap, but bakes chapkit-test-specific behavior into the model.
+   > - **Skip `chapkit test` and write your own pytest smoke** that posts `example_data/` against the chapkit FastAPI app. This repo took this path — see [B.4](#b4-pytest-end-to-end-smoke-in-process-via-fastapi-testclient).
+   >
+   > Pick whichever fits.
 
-6. Build the container and rerun step 5 against it:
+4. Build the container and rerun step 3 against it:
 
    ```
-   docker compose build
-   docker compose up -d
-   until curl -sf http://localhost:8000/health > /dev/null 2>&1; do sleep 2; done
+   docker compose up --build
+   # in another shell:
+   curl http://localhost:8000/health
    chapkit test --url http://localhost:8000 --timeout 180 --verbose
    ```
 
-When `chapkit test` reports `ALL TESTS PASSED` (or the only failure is the architecture limitation noted above and your parity check passes), Part A is complete.
+When your smoke (`chapkit test` or your own pytest) reports passing, Part A is complete.
 
 ---
 
@@ -629,32 +548,67 @@ Two small compose files make local development painless:
 
 The scaffold already ships `compose.yml`. Add `compose.ghcr.yml` once you start publishing images.
 
-## B.4 Parity check vs the original CLI (during the migration)
+## B.4 Pytest end-to-end smoke (in-process via FastAPI TestClient)
 
-While you still have the original `train.py` / `predict.py` checked in, a parity script gives you confidence the chapkit wrapper produces the same output before you delete the legacy CLI. The pattern:
+Because chapkit is built on FastAPI, you can drive the chapkit app in-process via Starlette's [`TestClient`](https://fastapi.tiangolo.com/tutorial/testing/) — no docker, no port, no `uvicorn` running in another shell. This repo's [`tests/test_smoke.py`](../tests/test_smoke.py) does exactly that against `example_data/`:
 
-- Split a CSV into historic + future.
-- Run the original CLI against the split (subprocess `train.py`, `predict.py`).
-- Run the chapkit service against the split (POST to `/api/v1/configs`, `/api/v1/ml/$train`, `/api/v1/ml/$predict`).
-- Download the prediction artifact (`GET /api/v1/artifacts/{id}/$download`) and compare per-cell means.
+```python
+# tests/conftest.py
+import os, tempfile
+from pathlib import Path
+import pytest
+
+# DATABASE_URL must be set BEFORE importing the app
+os.environ.setdefault(
+    "DATABASE_URL",
+    f"sqlite+aiosqlite:///{tempfile.mkdtemp(prefix='chapkit_test_')}/test.db",
+)
+
+from fastapi.testclient import TestClient  # noqa: E402
+from simple_multistep_model.main import app  # noqa: E402
+
+@pytest.fixture(scope="session")
+def client():
+    with TestClient(app) as c:
+        yield c
+```
+
+```python
+# tests/test_smoke.py
+def test_train_and_predict_against_example_data(client, example_data_dir):
+    historic = pd.read_csv(example_data_dir / "historic_data.csv")
+    future = pd.read_csv(example_data_dir / "future_data.csv")
+    future["disease_cases"] = np.nan
+
+    cfg = client.post("/api/v1/configs", json={...}).json()
+    train = client.post("/api/v1/ml/$train", json={"config_id": cfg["id"], "data": _df_payload(historic)}).json()
+    _wait_for_job(client, train["job_id"])
+    # ... fetch artifact, post $predict, poll, download, assert
+```
+
+Three tests (`test_health`, `test_info`, `test_train_and_predict_against_example_data`) run in ~3s on a fresh in-memory SQLite scratch dir. Add `pytest`, `httpx` (TestClient depends on it), and any HTTP-related fixtures to your dev dep group. Wire it into a `make test` target. This is what CI runs (B.5).
+
+Two API gotchas to handle in the test helpers:
+
+- **NaN serialization.** Pandas `NaN` is not JSON-compliant. Convert row-by-row, replacing `NaN` with `None`, then `json.dumps(payload, allow_nan=False)`.
+- **Required `prediction_periods`.** `BaseConfig` declares `prediction_periods` without a default — every config payload needs `"prediction_periods": <int>`.
+
+### Parity check vs the original CLI (during the migration only)
+
+While you still have the original `train.py` / `predict.py` checked in, a one-shot parity script gives you confidence the chapkit wrapper produces the same output before you delete the legacy CLI. Pattern: split a CSV into historic + future, run the original CLI on it, run the chapkit service on it (over HTTP or via TestClient), download the prediction artifact (`GET /api/v1/artifacts/{id}/$download`), compare per-cell means.
 
 For a stochastic model with independently seeded RNGs, expect mean-of-means within ~1% and per-cell relative differences in the 5–15% range from sampling noise. Identical means across thousands of cells = same model.
 
-Two API gotchas to handle in the script:
-
-- **NaN serialization.** `requests.post(json=...)` rejects NaN floats. Pre-clean DataFrames row-by-row, replacing `NaN` with `None`, then `json.dumps(payload, allow_nan=False)`.
-- **Required `prediction_periods`.** `BaseConfig` declares `prediction_periods` without a default — every config payload needs `"prediction_periods": <int>`.
-
-Once parity is confirmed, delete the legacy CLI and the parity script — neither belongs in a pure chapkit repo long-term.
+Once parity is confirmed, delete the legacy CLI and the parity script — neither belongs in a pure chapkit repo long-term. (This repo went through that exercise during conversion and reported `mean-of-means within ~0.15% over 216 location/period predictions` before deleting the originals.)
 
 ## B.5 GitHub Actions CI
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs two jobs on push and pull request to `main`:
 
-- **lint** — installs uv and Python 3.13, runs `make check`.
-- **docker-test** — builds the image via buildx with `load: true`, starts the container, polls `/health` until healthy, installs chapkit, runs `chapkit test --url http://localhost:8000 --timeout 180 --verbose`, dumps container logs on failure, and tears down the container on always.
+- **lint-and-test** — installs uv and Python 3.13, runs `make check` (ruff) and `make test` (the pytest smoke described in B.4 below). Fast, no docker.
+- **docker-build** — builds the image via buildx with `load: true`, starts the container, polls `/health`, hits `/api/v1/info`, dumps logs on failure. A pure container-boot smoke; the functional verification already happened in `lint-and-test`.
 
-The `docker-test` job is the one that matters most — it is an actual functional test of your migrated service running inside the container, not just a "did the build succeed" check.
+This split is intentional: the expensive end-to-end check (real train + predict against `example_data/`) runs as a fast unit test via `TestClient`, and the docker job stays focused on "does the container come up and serve". You could equally well combine them — earlier iterations of this repo ran `chapkit test` against the container in CI; both shapes work.
 
 ## B.6 GHCR publish workflow
 
@@ -722,8 +676,88 @@ runner = ShellModelRunner(
 
 ## B.9 Documentation
 
-- `README.md` — overview, quickstart, how to run `chapkit test` locally, link to this guide. The scaffold generates a starter README.
+- `README.md` — overview, quickstart, how to run `make test` locally, link to this guide. The scaffold generates a starter README.
 - `CLAUDE.md` or equivalent contributor docs — project conventions (commit style, branch naming, code-style rules).
+
+## B.10 Outgrow the flat scaffold layout (`src/`+`uv_build` + separate `train.py` / `predict.py`)
+
+The flat scaffold (`main.py` at the repo root) is fine for the smallest models. As the codebase grows — model package + transformations + multiple glue modules + tests — `main.py` collects three concerns it shouldn't (model definition, training logic, prediction logic), and module imports get awkward. Two complementary improvements:
+
+### Move to a `src/` layout with `uv_build`
+
+Restructure so the package lives under `src/<your_package>/` and is built/installed by [`uv_build`](https://docs.astral.sh/uv/concepts/projects/build/) instead of being run as scripts at the repo root:
+
+```
+my-model/
+├── pyproject.toml
+├── uv.lock
+├── Dockerfile
+├── compose.yml
+├── compose.ghcr.yml
+├── Makefile
+├── README.md
+├── example_data/
+├── docs/
+├── tests/
+└── src/
+    └── simple_multistep_model/
+        ├── __init__.py
+        ├── __main__.py            # `python -m simple_multistep_model` -> uvicorn
+        ├── main.py                # service composition (info, hierarchy, builder)
+        ├── train.py               # MultistepConfig + on_train
+        ├── predict.py             # on_predict
+        ├── multistep.py           # MultistepModel and friends (the algorithm)
+        ├── one_step_model.py      # SkproWrapper, ResidualBootstrapModel
+        └── transformations.py     # feature engineering helpers
+```
+
+`pyproject.toml` switches to `uv_build`:
+
+```toml
+[build-system]
+requires = ["uv_build>=0.5,<0.12"]
+build-backend = "uv_build"
+
+[project]
+name = "simple_multistep_model"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = ["chapkit>=0.17.1", "numpy", "pandas", "xarray", "scikit-learn", "skpro"]
+```
+
+`uv_build` auto-detects `src/<package_name>/` so no extra config is required. After moving files in, run `uv lock && uv sync`. `from simple_multistep_model.main import app` then works from anywhere — including the pytest TestClient fixture in B.4.
+
+Inside the package, switch to relative imports (`from . import DataFrameMultistepModel`, `from .transformations import transform_data`) so the modules are decoupled from the install layout.
+
+### Split `main.py` into `train.py` + `predict.py`
+
+Once `on_train` and `on_predict` start growing real logic, give them their own modules. `main.py` shrinks to pure service composition (info, hierarchy, builder, `from .train import on_train`, `from .predict import on_predict`). In this repo the split lands at ~67 LOC for `main.py`, ~68 for `train.py` (also owns `MultistepConfig`), ~31 for `predict.py`.
+
+### `__main__.py` for `python -m`
+
+A 12-line `src/<your_package>/__main__.py` lets contributors and Docker boot the service with `python -m <your_package>` instead of memorizing the uvicorn invocation:
+
+```python
+import os
+import uvicorn
+
+
+def main() -> None:
+    uvicorn.run(
+        "simple_multistep_model.main:app",
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("PORT", "8000")),
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    main()
+```
+
+The Dockerfile `CMD` then becomes a one-liner: `CMD ["python", "-m", "simple_multistep_model"]`.
+
+None of this is required to ship a chapkit service. Defer it until `main.py` is genuinely too big or you want pytest-driven testing (B.4) — then do the whole restructure in one commit.
 
 ---
 
@@ -737,20 +771,24 @@ Required — do not ship without these:
 - [ ] Inputs converted with `data.to_pandas()` / `historic.to_pandas()` / `future.to_pandas()`
 - [ ] `on_predict` returns `ChapDataFrame.from_pandas(predictions)` with `sample_*` columns
 - [ ] Original positional-arg CLIs removed (after a parity check confirms equivalent output)
-- [ ] `Dockerfile` adapted to your model (single-stage Python 3.13 + uv usually fine; add native build deps if needed)
+- [ ] Scaffolded `Dockerfile` left as-is unless your model has native build deps, GPU needs, or amd64-only requirements
 - [ ] `uv lock` run and `uv.lock` committed
 - [ ] Service boots locally (`uv run uvicorn main:app`) and `/health` returns healthy
-- [ ] At minimum a manual `POST /api/v1/configs` + `POST /api/v1/ml/$train` + `POST /api/v1/ml/$predict` cycle succeeds against the built container
+- [ ] At minimum a manual `POST /api/v1/configs` + `POST /api/v1/ml/$train` + `POST /api/v1/ml/$predict` cycle succeeds against the built container, OR `chapkit test` passes, OR your own pytest TestClient smoke passes
 
 Optional — add as useful:
 
-- [ ] Makefile (`build`, `run`, `run-ghcr`, `lint`, `check`)
+- [ ] Makefile (`build`, `run`, `run-ghcr`, `test`, `lint`, `check`)
 - [ ] Ruff lint and format
 - [ ] `compose.yml` (shipped by scaffold) and `compose.ghcr.yml`
-- [ ] Parity check script vs original CLI
-- [ ] CI workflow (lint + docker-test)
+- [ ] pytest end-to-end smoke via FastAPI TestClient (B.4)
+- [ ] Parity check script vs original CLI (during the migration only)
+- [ ] CI workflow (lint-and-test + docker-build)
 - [ ] GHCR publish workflow
 - [ ] Example data committed
+- [ ] `train` / `predict` console scripts (future shell-runner readiness)
+- [ ] CHAP Core self-registration (live deployments only)
+- [ ] `src/` layout + `uv_build` + separate `train.py`/`predict.py` (when codebase grows)
 - [ ] README and contributor docs
 
 ---
@@ -768,11 +806,12 @@ The canonical worked example for every section above.
 | [`src/simple_multistep_model/multistep.py`](../src/simple_multistep_model/multistep.py), [`one_step_model.py`](../src/simple_multistep_model/one_step_model.py) | The model algorithm itself — pure pandas / xarray, no chapkit dependency |
 | [`src/simple_multistep_model/transformations.py`](../src/simple_multistep_model/transformations.py) | Feature-engineering helpers (lag features + one-hot location) |
 | [`pyproject.toml`](../pyproject.toml) | `uv_build` build backend, chapkit + sklearn + skpro deps, src layout |
-| [`Dockerfile`](../Dockerfile) | Single-stage Python 3.13 + uv image (chap-core style) |
-| [`Makefile`](../Makefile) | `build`, `run`, `run-ghcr`, `lint` (auto-fix), `check` (CI) targets |
+| [`Dockerfile`](../Dockerfile) | Single-stage Python 3.13 + uv image (chap-core style) — alternative to the scaffold's multi-stage default |
+| [`Makefile`](../Makefile) | `build`, `run`, `run-ghcr`, `test`, `lint` (auto-fix), `check` (CI) targets |
 | [`compose.yml`](../compose.yml), [`compose.ghcr.yml`](../compose.ghcr.yml) | Local and remote run recipes |
 | [`example_data/`](../example_data/) | `training_data.csv`, `historic_data.csv`, `future_data.csv` ready for `$train` / `$predict` |
-| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | Lint job + docker-test job running `chapkit test` against the container |
+| [`tests/test_smoke.py`](../tests/test_smoke.py) + [`conftest.py`](../tests/conftest.py) | pytest end-to-end via FastAPI TestClient (in-process, ~3s) |
+| [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | `lint-and-test` (ruff + pytest) + `docker-build` (image boots, /health serves) |
 | [`.github/workflows/publish-docker.yml`](../.github/workflows/publish-docker.yml) | GHCR publish on push to main and version tags |
 
 ---
@@ -781,34 +820,36 @@ The canonical worked example for every section above.
 
 If for any reason you cannot run `chapkit init` (e.g. you are patching an existing repo in place), you can write the same files by hand. The scaffold is not magic — it is a small set of templates.
 
+The minimum that gets you a working chapkit service (mirrors what the scaffold generates):
+
 **`pyproject.toml`**
 
 ```toml
-[build-system]
-requires = ["uv_build>=0.5"]
-build-backend = "uv_build"
-
 [project]
 name = "your_model"
 version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "chapkit>=0.17.1",
+    "pandas>=2.3.3",
     # plus your model deps (sklearn, torch, statsmodels, ...)
 ]
+
+[dependency-groups]
+dev = ["uvicorn[standard]>=0.30.0"]
 ```
 
 Then run `uv lock && uv sync` to generate `uv.lock` and the `.venv`.
 
-**`src/your_model/main.py` + `__main__.py` + `train.py` + `predict.py`**
+**`main.py`**
 
-Start from the imports, config class, callables, runner, service info, hierarchy, and builder shown in sections A.3.1 through A.3.6 above. The four modules in this repo (`main.py` 67 lines, `train.py` 68 lines, `predict.py` 31 lines, `__main__.py` 12 lines) are a complete working reference — copy them and edit the fields.
+Start from the imports, config class, callables, runner, service info, hierarchy, and builder shown in sections A.3.1 through A.3.6 above. The scaffolded `main.py` from `chapkit init` is a complete working reference — copy it and edit the fields.
 
 **`Dockerfile`**
 
-Copy the Dockerfile shown in section A.5.
+The scaffolded multi-stage Dockerfile is the recommended starting point. Reproducing it here would be redundant; just `chapkit init` a throwaway project to grab it. If you prefer the single-stage chap-core style, copy the Dockerfile shown in section A.5.
 
-Everything from A.4 onward (move code, verify) applies identically.
+Everything from A.4 onward (move code, verify) applies identically. Once your codebase outgrows the flat layout, follow B.10 to move to `src/` + `uv_build` + separate `train.py` / `predict.py` (which is what *this* repo runs).
 
 ---
 
