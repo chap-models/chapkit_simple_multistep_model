@@ -1,19 +1,11 @@
-FROM ghcr.io/astral-sh/uv:0.10-python3.13-trixie-slim
+FROM ghcr.io/dhis2-chap/chapkit-py:latest
 
-ENV UV_COMPILE_BYTECODE=1
-ENV UV_LINK_MODE=copy
-ENV PYTHONDONTWRITEBYTECODE=1
 ENV MPLCONFIGDIR=/tmp
 ENV PORT=8000
-ENV PATH="/app/.venv/bin:$PATH"
-
-ARG GIT_REVISION=""
-ENV GIT_REVISION=${GIT_REVISION}
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends git curl tini && \
+    apt-get update && apt-get install -y --no-install-recommends tini && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     useradd --no-create-home --shell /usr/sbin/nologin chap
 
