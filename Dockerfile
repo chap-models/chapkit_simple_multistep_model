@@ -16,6 +16,11 @@ COPY --chown=root:root pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project
 
+# Commit the image was built from, reported as git_revision on /api/v1/info.
+# The publish workflow passes it; locally: --build-arg GIT_REVISION=$(git rev-parse HEAD)
+ARG GIT_REVISION=""
+ENV GIT_REVISION=${GIT_REVISION}
+
 COPY --chown=root:root src ./src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
