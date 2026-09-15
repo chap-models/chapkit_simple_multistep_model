@@ -1,6 +1,8 @@
 .PHONY: help build run run-ghcr test lint check clean
 
 GHCR_IMAGE  ?= ghcr.io/chap-models/chapkit_simple_multistep_model:latest
+# Baked into the image by compose.yml as git_revision on /api/v1/info.
+export GIT_REVISION ?= $(shell git rev-parse HEAD 2>/dev/null)
 
 help:
 	@echo "Usage: make [target]"
