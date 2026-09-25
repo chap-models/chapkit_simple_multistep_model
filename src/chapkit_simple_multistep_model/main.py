@@ -27,7 +27,7 @@ runner: FunctionalModelRunner[MultistepConfig] = FunctionalModelRunner(
 info = MLServiceInfo(
     id="chapkit-simple-multistep-model",
     display_name="Simple Multistep Model (chapkit)",
-    version="0.1.1",
+    version="0.1.2",
     description=(
         "Multistep recursive forecaster: RandomForest + skpro ResidualDouble "
         "wrapped in a recursive multi-step predictor with per-location lag features."
@@ -40,6 +40,8 @@ info = MLServiceInfo(
     ),
     period_type=PeriodType.monthly,
     allow_free_additional_continuous_covariates=True,
+    # Nothing beyond disease_cases is required: covariates come from the configuration,
+    # and the default configuration fits on lagged case history alone.
     required_covariates=[],
     min_prediction_periods=1,
     max_prediction_periods=100,

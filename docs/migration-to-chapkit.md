@@ -183,12 +183,12 @@ class MultistepConfig(BaseConfig):
         description="Minimum samples per leaf for the underlying RandomForest regressor.",
     )
     additional_continuous_covariates: list[str] = Field(
-        default_factory=lambda: ["rainfall", "mean_temperature", "mean_relative_humidity"],
+        default_factory=list,
         description="Continuous covariates to include as exogenous features.",
     )
 ```
 
-Every field here replaces what used to live as module-level constants in `train.py` (`N_TARGET_LAGS`, `N_SAMPLES`, hardcoded RF hyperparams). Validation and defaults now live in Python, and the schema is auto-exposed at `/api/v1/configs/$schema`. `additional_continuous_covariates` is a reserved `BaseConfig` field — overriding its default here means the model uses all three climate covariates by default, but deployments can create variant configs (e.g. `[]` for a population-only run) via `POST /api/v1/configs` without forking the repo.
+Every field here replaces what used to live as module-level constants in `train.py` (`N_TARGET_LAGS`, `N_SAMPLES`, hardcoded RF hyperparams). Validation and defaults now live in Python, and the schema is auto-exposed at `/api/v1/configs/$schema`. `additional_continuous_covariates` is a reserved `BaseConfig` field — left empty, the model fits on lagged case history alone, and the climate covariates arrive from a named configuration created via `POST /api/v1/configs` without forking the repo (this repo keeps the trio as a `CLIMATE_FEATURES` constant for the configuration to ask for). Defaulting it to those three columns instead looks convenient and is a trap: CHAP drops an empty `additional_continuous_covariates` rather than sending it, so a covariate-free variant config can never override a non-empty default — and with `required_covariates` empty, the run is handed a dataset without the columns that default asked for.
 
 ### A.3.2 The two async callables — `on_train` and `on_predict`
 
@@ -218,7 +218,7 @@ async def on_predict(
 >
 > This is the single most common mistake when migrating a Python model. The `chapkit test` CLI surfaces it as `AttributeError: 'DataFrame' object has no attribute 'sort_values'` on the first training job.
 
-In this repo the two callables live in separate files — [`src/chapkit_simple_multistep_model/train.py`](../src/chapkit_simple_multistep_model/train.py) and [`src/chapkit_simple_multistep_model/predict.py`](../src/chapkit_simple_multistep_model/predict.py) — and the `MultistepConfig` Pydantic class plus the canonical column constants (`INDEX_COLS`, `TARGET_VARIABLE`, `DEFAULT_FEATURES`) live in a sibling [`config.py`](../src/chapkit_simple_multistep_model/config.py) so neither train nor predict depends on the other. `main.py` just imports and wires them all. That keeps each module focused: `config.py` is the schema, `train.py` is the training callable, `predict.py` is the prediction callable, `main.py` is service composition. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
+In this repo the two callables live in separate files — [`src/chapkit_simple_multistep_model/train.py`](../src/chapkit_simple_multistep_model/train.py) and [`src/chapkit_simple_multistep_model/predict.py`](../src/chapkit_simple_multistep_model/predict.py) — and the `MultistepConfig` Pydantic class plus the canonical column constants (`INDEX_COLS`, `TARGET_VARIABLE`, `CLIMATE_FEATURES`) live in a sibling [`config.py`](../src/chapkit_simple_multistep_model/config.py) so neither train nor predict depends on the other. `main.py` just imports and wires them all. That keeps each module focused: `config.py` is the schema, `train.py` is the training callable, `predict.py` is the prediction callable, `main.py` is service composition. The old positional-arg `train.py` / `predict.py` from the original repo were the obvious template for this split:
 
 ```python
 from chapkit.data import DataFrame as ChapDataFrame
@@ -331,7 +331,7 @@ Fields you almost always need to customize:
 - `display_name`, `version`, `description` — human-readable metadata.
 - `model_metadata` — author, organization, assessed confidence, citation.
 - `period_type` — `PeriodType.monthly` or `PeriodType.weekly`.
-- `required_covariates` — list of canonical CHAP column names your model requires in addition to `disease_cases`. Leave `[]` if everything beyond `disease_cases` is optional.
+- `required_covariates` — the canonical CHAP column names your model cannot run without, beyond `disease_cases`. CHAP builds a run's dataset from `required_covariates` plus whatever `additional_continuous_covariates` the configured model carries. Mind the trap: because CHAP drops an empty additional list rather than sending it, a service whose own schema default names covariates while `required_covariates` is empty will be handed a dataset without them, and fail on the missing columns. Keep the schema default empty and let a configuration ask for covariates, or declare them required here.
 - `allow_free_additional_continuous_covariates` — whether the model can accept extra continuous covariates beyond those required.
 - `min_prediction_periods`, `max_prediction_periods` — forecast horizon bounds.
 

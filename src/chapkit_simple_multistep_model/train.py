@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestRegressor
 from skpro.regression.residual import ResidualDouble
 
 from . import DataFrameMultistepModel, SkproWrapper
-from .config import INDEX_COLS, TARGET_VARIABLE, MultistepConfig
+from .config import INDEX_COLS, TARGET_VARIABLE, MultistepConfig, check_feature_columns
 from .transformations import transform_data
 
 
@@ -21,6 +21,7 @@ async def on_train(
 ) -> Any:
     df = data.to_pandas()
     feature_cols = list(config.additional_continuous_covariates)
+    check_feature_columns(df.columns, feature_cols)
     y = df[INDEX_COLS + [TARGET_VARIABLE]]
     X = df[INDEX_COLS + feature_cols]
     X = transform_data(X)
