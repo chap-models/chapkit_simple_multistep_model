@@ -33,7 +33,7 @@ make run-ghcr       # pull prebuilt image from GHCR
 make test           # pytest end-to-end (in-process via FastAPI TestClient)
 ```
 
-`tests/test_smoke.py` drives the chapkit ASGI app directly through Starlette's `TestClient` — no docker, no port, no `make run` required. It posts `historic_data.csv` to `$train`, `future_data.csv` to `$predict`, downloads the prediction artifact, and asserts shape + sane mean. Runs in ~3s on a fresh in-memory SQLite scratch dir.
+`tests/test_smoke.py` drives the chapkit ASGI app directly through Starlette's `TestClient` — no docker, no port, no `make run` required. It posts `historic_data.csv` to `$train`, `future_data.csv` to `$predict`, downloads the prediction artifact, and asserts shape + sane mean — once with the climate covariates and once with none, plus a check that a covariate the data does not carry is reported by name. Runs in ~5s on a fresh in-memory SQLite scratch dir.
 
 ### Note on `chapkit test`
 
