@@ -27,7 +27,7 @@ runner: FunctionalModelRunner[MultistepConfig] = FunctionalModelRunner(
 info = MLServiceInfo(
     id="chapkit-simple-multistep-model",
     display_name="Simple Multistep Model (chapkit)",
-    version="0.1.2",
+    version="0.1.4",
     description=(
         "Multistep recursive forecaster: RandomForest + skpro ResidualDouble "
         "wrapped in a recursive multi-step predictor with per-location lag features."
@@ -65,6 +65,7 @@ app = (
         runner=runner,
         database_url=DATABASE_URL,
     )
+    .with_monitoring()
     .with_registration(keepalive_interval=15)
     .build()
 )
