@@ -90,7 +90,7 @@ wheels = [
 
 [[package]]
 name = "chapkit-simple-multistep-model"
-version = "0.1.0"
+version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "chapkit" },
