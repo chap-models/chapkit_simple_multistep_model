@@ -1,4 +1,4 @@
-FROM ghcr.io/dhis2-chap/chapkit-py:latest
+FROM ghcr.io/dhis2-chap/chapkit-py:latest@sha256:107479a76c4964c08e2125433d7728894d93e2cd5695a51b621b206c299cffd2
 
 ENV MPLCONFIGDIR=/tmp
 ENV PORT=8000
